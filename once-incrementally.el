@@ -63,7 +63,7 @@ form (:feature <feature>).")
 ;; * Helpers
 (defun once--load-feature (feature)
   "Load FEATURE and return t."
-  (message "Once loading %s" feature)
+  (message "ONCE: loading %s" feature)
   ;; if `default-directory' doesn't exist or is unreadable, Emacs throws file
   ;; errors
   (let ((default-directory user-emacs-directory)
@@ -80,7 +80,7 @@ ITEM should be in the format (:feature <feature>) or (:function <function>)."
         (code (cadr item)))
     (if (eq type :feature)
         (once--load-feature code)
-      (message "Once running %s" code)
+      (message "ONCE: running %s" code)
       (funcall code)
       t)))
 
@@ -100,7 +100,7 @@ remaining code after `once-incremental-run-interval'."
                        (setq code (cadr item))
                        (and (eq type :feature)
                             (featurep code))))
-      (message "Once already loaded %s" code)
+      (message "ONCE: already loaded %s" code)
       (setq item nil))
     (when item
       (condition-case-unless-debug e
@@ -117,7 +117,7 @@ remaining code after `once-incremental-run-interval'."
                   code
                   e))))
     (if (null once--incremental-code)
-        (message "Once finished incrementally running code")
+        (message "ONCE: finished incrementally running code")
       (run-at-time (if idle-time
                        once-idle-timer
                      once-incremental-run-interval)

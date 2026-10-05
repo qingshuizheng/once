@@ -54,6 +54,22 @@ item until user input."
   :type 'number
   :group 'once)
 
+(defcustom once-incremental-messages nil
+  "Whether to message about incrementally loading and running code.
+By default the only message is the one for a failure; set this to t to also
+see each feature that is loaded, each function that is called, each feature
+that is skipped because it is already loaded, and when the queue is empty."
+  :type 'boolean
+  :group 'once)
+
+(defcustom once-incremental-error-messages t
+  "Whether to message when incrementally loading or running code fails.
+Set this to nil to silence failures too.  `once-incremental-messages'
+controls the messages about what is loaded and run; this one controls the
+messages about what went wrong."
+  :type 'boolean
+  :group 'once)
+
 (defvar once--incremental-code nil
   "List of functions to run and packages to load incrementally after startup.
 Each item can either be a function to run or feature to require.  Functions
@@ -63,7 +79,8 @@ form (:feature <feature>).")
 ;; * Helpers
 (defun once--load-feature (feature)
   "Load FEATURE and return t."
-  (message "once.el: Loading %s" feature)
+  (when once-incremental-messages
+    (message "once.el: Loading %s" feature))
   ;; if `default-directory' doesn't exist or is unreadable, Emacs throws file
   ;; errors
   (let ((default-directory user-emacs-directory)
@@ -80,7 +97,8 @@ ITEM should be in the format (:feature <feature>) or (:function <function>)."
         (code (cadr item)))
     (if (eq type :feature)
         (once--load-feature code)
-      (message "once.el: Running %s" code)
+      (when once-incremental-messages
+        (message "once.el: Running %s" code))
       (funcall code)
       t)))
 
@@ -101,11 +119,13 @@ the remaining entries run after `once-incremental-run-interval'."
                        (setq code (cadr item))
                        (and (eq type :feature)
                             (featurep code))))
-      (message "once.el: %s already loaded (skipping)" code))
+      (when once-incremental-messages
+        (message "once.el: %s already loaded (skipping)" code)))
     (cond
      ;; no more items to process
      ((null item)
-      (message "once.el: Finished incrementally running code"))
+      (when once-incremental-messages
+        (message "once.el: Finished incrementally running code")))
      ;; not idle long enough - wait for remaining time (or full idle timer)
      ((or (null (setq idle-time (current-idle-time)))
           (< (float-time idle-time) once-idle-timer))
@@ -137,10 +157,11 @@ the remaining entries run after `once-incremental-run-interval'."
          (run-at-time once-idle-timer nil #'once--run-incrementally)
          (signal (car e) (cdr e)))
         (error
-         (message "Error: once.el failed to incrementally run %S because: %s - %s"
-                  item
-                  (car e)
-                  (error-message-string e))
+         (when once-incremental-error-messages
+           (message "Error: once.el failed to incrementally run %S because: %s - %s"
+                    item
+                    (car e)
+                    (error-message-string e)))
          (run-at-time once-incremental-run-interval nil
                       #'once--run-incrementally)))))))
 
@@ -153,10 +174,11 @@ the remaining entries run after `once-incremental-run-interval'."
             (condition-case e
                 (once--run item)
               (error
-               (message "Error: once.el failed to run %S because: %s - %s"
-                        item
-                        (car e)
-                        (error-message-string e))))))
+               (when once-incremental-error-messages
+                 (message "Error: once.el failed to run %S because: %s - %s"
+                          item
+                          (car e)
+                          (error-message-string e)))))))
       (run-with-idle-timer once-idle-timer
                            nil #'once--run-incrementally))))
 

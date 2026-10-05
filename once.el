@@ -432,16 +432,20 @@ e.g.
                                          &optional initial-check check)
   "Run FUNCTION once now or later.
 INITIAL-CHECK and CHECK should be functions that take no arguments and return
-non-nil if FUNCTION should run now.  If any PACKAGES have already been loaded,
-run FUNCTION now.  When delaying FUNCTION, run it the first time a hook from
-HOOKS triggers, a symbol in ADVISE-SYMBOLS is called, or a package in PACKAGES
-loads."
-  (let ((check (or initial-check check)))
-    (if (if check
-            (funcall check)
+non-nil if FUNCTION should run.  INITIAL-CHECK only decides whether to run
+FUNCTION immediately; CHECK is used both for that decision and on every later
+trigger.  When only one of the two is given, it is used for both.  If any
+PACKAGES have already been loaded, run FUNCTION now.  When delaying FUNCTION,
+run it the first time a hook from HOOKS triggers, a symbol in ADVISE-SYMBOLS is
+called, or a package in PACKAGES loads."
+  (let ((run-now-check (or initial-check check))
+        (later-check (or check initial-check)))
+    (if (if run-now-check
+            (funcall run-now-check)
           (cl-some #'once--file-loaded-p (mapcar #'car packages)))
         (funcall function)
-      (once--call-later function hooks advise-symbols packages variables check))))
+      (once--call-later function hooks advise-symbols packages variables
+                        later-check))))
 
 (defun once--condition-item-to-list (item)
   "Return ITEM as as (list ITEM nil) if it is not already a list.

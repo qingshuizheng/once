@@ -60,6 +60,8 @@ reconstruction; it is the same idea for meow's `meow-insert-enter-hook'.
 
 ## API
 
+Examples of every condition are in `examples/once-conditions-examples.el`.
+
 | Symbol | Type |
 | --- | --- |
 | `once-evil-insert-states` | `defcustom` |
@@ -90,6 +92,73 @@ reconstruction; it is the same idea for meow's `meow-insert-enter-hook'.
 | `once-evil-insert-and-writable` | `defmacro` |
 | `once-meow-insert-and-writable` | `defvar` |
 | `once-meow-insert-and-writable` | `defmacro` |
+| `once-minibuffer` | `defvar` |
+| `once-minibuffer` | `defmacro` |
+| `once-save` | `defvar` |
+| `once-save` | `defmacro` |
+| `once-edit` | `defvar` |
+| `once-edit` | `defmacro` |
+| `once-directory` | `defvar` |
+| `once-directory` | `defmacro` |
+| `once-search` | `defvar` |
+| `once-search` | `defmacro` |
+| `once-prog` | `defvar` |
+| `once-prog` | `defmacro` |
+| `once-theme` | `defvar` |
+| `once-theme` | `defmacro` |
+| `once-second-frame` | `defvar` |
+| `once-second-frame` | `defmacro` |
+| `once-client-frame` | `defvar` |
+| `once-client-frame` | `defmacro` |
+| `once-mouse` | `defvar` |
+| `once-mouse` | `defmacro` |
+| `once-remote-file` | `defvar` |
+| `once-remote-file` | `defmacro` |
+| `once-large-file` | `defvar` |
+| `once-large-file` | `defmacro` |
+| `once-ime` | `defvar` |
+| `once-ime` | `defmacro` |
+| `once-mark` | `defvar` |
+| `once-mark` | `defmacro` |
+| `once-elisp` | `defvar` |
+| `once-elisp` | `defmacro` |
+| `once-project` | `defvar` |
+| `once-project` | `defmacro` |
+| `once-debugger` | `defvar` |
+| `once-debugger` | `defmacro` |
+| `once-kill` | `defvar` |
+| `once-kill` | `defmacro` |
+
+### Condition triggers
+
+| Condition | Waits for | Trigger |
+| --- | --- | --- |
+| `once-minibuffer` | a minibuffer to be entered | `minibuffer-setup-hook` |
+| `once-save` | a buffer to be saved | `after-save-hook` |
+| `once-edit` | the current buffer to be modified | `first-change-hook` |
+| `once-directory` | a directory to be visited with Dired | `:before` advice on `dired` |
+| `once-search` | an incremental search to start | `isearch-mode-hook` |
+| `once-prog` | a programming mode to be entered | `prog-mode-hook` |
+| `once-theme` | a theme to be enabled | `enable-theme-functions` |
+| `once-second-frame` | a second frame to exist | `after-make-frame-functions`, with a local check that counts `frame-list` |
+| `once-client-frame` | the server to create a client frame | `server-after-make-frame-hook` |
+| `once-mouse` | the user to perform a mouse event | `pre-command-hook`, with a local check on `last-command-event` |
+| `once-remote-file` | a remote file to be opened | `:before` advice on `find-file`, with a local check on its file argument |
+| `once-large-file` | a large file to be opened | `find-file-hook`, with a local check on `buffer-size` |
+| `once-ime` | an input method to be activated | `input-method-activate-hook` |
+| `once-mark` | a region to become active | `activate-mark-hook` |
+| `once-elisp` | an Emacs Lisp buffer to be set up | `emacs-lisp-mode-hook` |
+| `once-project` | a file inside a project to be opened | `find-file-hook`, with a local check that `project-current` finds a project |
+| `once-debugger` | the debugger to be entered | `:before` advice on `debug` |
+| `once-kill` | something to be added to the kill ring | `:before` advice on `kill-new` |
+
+All eighteen of these are trigger-driven: unlike `once-init`, `once-gui`,
+and `once-tty`, they never run while the init file is still being read.
+`once-directory`, `once-debugger`, and `once-kill` are `:before` advice on
+the `dired`, `debug`, and `kill-new` functions rather than hooks, so those
+functions do not have to be loaded for them to be set up.  The local check
+of `once-project` runs from `find-file-hook` with the buffer current, which
+is what lets it ask `project-current`.
 
 ## Tests
 

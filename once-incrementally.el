@@ -86,8 +86,9 @@ ITEM should be in the format (:feature <feature>) or (:function <function>)."
 
 (defun once--run-incrementally ()
   "Incrementally run code in `once--incremental-code' until it is empty.
-When failing to load a package or run some code, skip it and continue trying to
-run the remaining entries after `once-incremental-run-interval'."
+An item cut off by user input goes back to the front of the queue and is
+tried again after `once-idle-timer'; a failure is reported and skipped, and
+the remaining entries run after `once-incremental-run-interval'."
   (let ((gc-cons-threshold most-positive-fixnum)
         item
         type
@@ -116,13 +117,25 @@ run the remaining entries after `once-incremental-run-interval'."
      ;; try to run the item
      (t
       (condition-case e
-          (if (while-no-input (once--run item))
+          ;; `while-no-input' returns t when input arrives and the value of
+          ;; its body otherwise, and `once--run' always returns t, so the body
+          ;; says something of its own: without the sentinel an item cut off by
+          ;; user input looks finished and is dropped from the queue
+          (if (eq 'once--run-finished
+                  (while-no-input (once--run item) 'once--run-finished))
               ;; completed successfully, use short interval for next item
               (run-at-time once-incremental-run-interval nil
                            #'once--run-incrementally)
-            ;; interrupted by user input, wait for idle time again
+            ;; cut off by user input: keep it for the next idle slot
             (push item once--incremental-code)
             (run-at-time once-idle-timer nil #'once--run-incrementally))
+        (quit
+         ;; `while-no-input' turns C-g into a real `quit' signal, which unwinds
+         ;; past the push and the `run-at-time' below, so put the item back,
+         ;; make sure the pass resumes, and then let the quit through
+         (push item once--incremental-code)
+         (run-at-time once-idle-timer nil #'once--run-incrementally)
+         (signal (car e) (cdr e)))
         (error
          (message "Error: once.el failed to incrementally run %S because: %s - %s"
                   item
@@ -130,7 +143,6 @@ run the remaining entries after `once-incremental-run-interval'."
                   (error-message-string e))
          (run-at-time once-incremental-run-interval nil
                       #'once--run-incrementally)))))))
-
 
 (defun once--begin-incremental-loading ()
   "Start the incremental loading process."

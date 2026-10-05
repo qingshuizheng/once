@@ -1,4 +1,4 @@
-;;; test-once-fixes.el --- Tests for the once fixes -*- lexical-binding: t; -*-
+;;; test-once-fixes.el --- Tests for two once fixes -*- lexical-binding: t; -*-
 
 ;; Copyright (c) 2026, Qingshui Zheng
 
@@ -23,18 +23,17 @@
 
 ;;; Commentary:
 ;;
-;; Behaviour tests for the fixes that used to live in the now deleted
+;; Behaviour tests for two fixes that used to live in the now deleted
 ;; `once-patches' layer and are folded into the once sources: the
-;; `:initial-check'/`:check' split in once.el, plus the cases of the
-;; incremental pass that do not depend on an item being interrupted.  The
-;; tests exercise `once' directly and the drone root is expected on
-;; `load-path'.
+;; `:initial-check'/`:check' split in once.el and the interrupted or quit
+;; incremental pass in once-incrementally.el.  The tests exercise `once'
+;; directly and the drone root is expected on `load-path'.
 ;;
 ;; Note: this file is ERT while the rest of tests/ uses buttercup, so it is
 ;; run from the drone root with `ert-run-tests-batch-and-exit' after the
 ;; drone root is put on `load-path'.
 ;;
-;; The check tests are the discriminating ones:
+;; The first test group is the discriminating one:
 ;; `test-once-fixes-later-trigger-uses-check-not-initial-check' fails against
 ;; the unpatched definition, which is the whole point of the fix.  Every
 ;; expected value was read off a real `emacs -Q --batch' run.
@@ -120,8 +119,8 @@ in scheduling order; no real timer is created."
                              '((test-once-fixes--absent-feature)) nil nil nil)
     (should-not ran)))
 
-;;; The incremental pass must not requeue a finished item, and it must wait
-;;; until it has been idle long enough.
+;;; Fix 2: an item interrupted by user input must not be mistaken for a
+;;; completed one, and a `quit' must not strand the incremental pass.
 
 (ert-deftest test-once-fixes-incremental-completed-item-is-not-requeued ()
   (let* ((item (list :function (lambda () nil)))
@@ -139,6 +138,24 @@ in scheduling order; no real timer is created."
     (should (equal timers
                    (list (list 0.5 #'once--run-incrementally))))))
 
+(ert-deftest test-once-fixes-incremental-interrupted-item-goes-back-to-the-front ()
+  (let* ((item (list :function (lambda () nil)))
+         (once--incremental-code (list item))
+         (once-idle-timer 7.0)
+         (once-incremental-run-interval 0.5)
+         ;; Pending input is what makes `while-no-input' return t.
+         (unread-command-events (list ?a))
+         (ran nil)
+         timers)
+    (test-once-fixes--with-captured-timers timers
+      (cl-letf (((symbol-function 'current-idle-time) (lambda () '(0 10)))
+                ((symbol-function 'once--run) (lambda (_item) (setq ran t) t)))
+        (once--run-incrementally)))
+    (should-not ran)
+    (should (equal once--incremental-code (list item)))
+    (should (equal timers
+                   (list (list 7.0 #'once--run-incrementally))))))
+
 (ert-deftest test-once-fixes-incremental-waits-when-not-idle-long-enough ()
   (let* ((item (list :function (lambda () nil)))
          (once--incremental-code (list item))
@@ -151,6 +168,29 @@ in scheduling order; no real timer is created."
                 ((symbol-function 'once--run) (lambda (_item) (setq ran t) t)))
         (once--run-incrementally)))
     (should-not ran)
+    (should (equal once--incremental-code (list item)))
+    (should (equal timers
+                   (list (list 7.0 #'once--run-incrementally))))))
+
+(ert-deftest test-once-fixes-incremental-quit-keeps-the-item-and-reschedules ()
+  (let* ((item (list :feature 'zone))
+         (once--incremental-code (list item))
+         (once-idle-timer 7.0)
+         (once-incremental-run-interval 0.5)
+         (caught nil)
+         timers)
+    (test-once-fixes--with-captured-timers timers
+      (cl-letf (((symbol-function 'current-idle-time) (lambda () '(0 10)))
+                ((symbol-function 'once--run)
+                 (lambda (_item) (signal 'quit nil))))
+        ;; C-g still has to reach the user as a quit.  `should-error' only
+        ;; catches `error', so the quit is caught here by hand.
+        (setq caught (condition-case err
+                         (progn (once--run-incrementally) nil)
+                       ((error quit) err)))))
+    (should (eq (car caught) 'quit))
+    ;; ... but the item is back in the queue and the pass is rescheduled
+    ;; instead of being stranded.
     (should (equal once--incremental-code (list item)))
     (should (equal timers
                    (list (list 7.0 #'once--run-incrementally))))))
@@ -171,6 +211,25 @@ in scheduling order; no real timer is created."
     (should-not once--incremental-code)
     (should (equal timers
                    (list (list 0.5 #'once--run-incrementally))))))
+
+(ert-deftest test-once-fixes-once-entry-point-keeps-an-interrupted-item ()
+  ;; Same scenario as above, but driven through the entry point `once' itself
+  ;; calls, so that the test also fails if the replacement is not installed:
+  ;; the unpatched code mistakes the `t' of "input arrived" for "finished" and
+  ;; drops the item.
+  (let* ((item (list :function (lambda () nil)))
+         (once--incremental-code (list item))
+         (once-idle-timer 7.0)
+         (once-incremental-run-interval 0.5)
+         (unread-command-events (list ?a))
+         timers)
+    (test-once-fixes--with-captured-timers timers
+      (cl-letf (((symbol-function 'current-idle-time) (lambda () '(0 10)))
+                ((symbol-function 'once--run) (lambda (_item) t)))
+        (once--run-incrementally)))
+    (should (equal once--incremental-code (list item)))
+    (should (equal timers
+                   (list (list 7.0 #'once--run-incrementally))))))
 
 (provide 'test-once-fixes)
 ;;; test-once-fixes.el ends here
